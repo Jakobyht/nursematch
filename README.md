@@ -43,8 +43,16 @@ generators make every simulation reproducible.
    base selection driven by pairing affinity (Watson-Crick fidelity), monomers
    docking under the force field; the physical daughter reproduces `dna_sim`'s
    complement and the semiconservative round-trip regenerates the original
-4. ⏳ Self-replicating assemblies and error/mutation under the physical model —
-   the point at which we attempt to re-create life
+4. ✅ **Full pipeline integrated** — atoms → molecules → DNA duplex →
+   replication → an evolving population, verified end to end
+   (`examples/origin_pipeline.py`, `tests/test_integration.py`). This is the
+   substrate on which we can attempt to re-create life through DNA.
+
+Run the whole stack in one narrative:
+
+```bash
+python examples/origin_pipeline.py
+```
 
 ## The bridge: `nucleic` (DNA base-pairing from physics)
 
