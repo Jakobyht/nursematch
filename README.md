@@ -51,15 +51,21 @@ generators make every simulation reproducible.
    so mutation rate rises with temperature. With *no* informational mutation
    model, that physics-made variation alone lets selection adapt a population
    (`examples/mutation_from_heat.py`).
+6. ✅ **A compartment self-assembles** (`protocell`) — coarse-grained
+   amphiphiles, scattered and randomly oriented, organise themselves via the
+   hydrophobic effect into a droplet with a hydrophobic tail core and a
+   hydrophilic head surface: a cell boundary built by physics
+   (`examples/membrane_demo.py`).
 
-**Next (loop in progress):** a self-assembling membrane / protocell compartment
-so replicating, mutating DNA can be enclosed — a candidate for re-created life.
+**Next (loop in progress):** enclose replicating, mutating DNA inside a
+self-assembled compartment — a minimal protocell, a candidate for re-created life.
 
 Run the whole stack in one narrative:
 
 ```bash
 python examples/origin_pipeline.py     # atoms -> molecules -> DNA -> life
 python examples/mutation_from_heat.py  # mutation from temperature -> evolution
+python examples/membrane_demo.py       # a compartment self-assembles
 ```
 
 ## The bridge: `nucleic` (DNA base-pairing from physics)
