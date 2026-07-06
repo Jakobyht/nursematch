@@ -43,6 +43,30 @@ def test_full_pipeline_information_to_matter_to_replication():
     assert str(result.as_daughter_strand()) == str(seq.reverse_complement())
 
 
+def test_physics_made_variation_drives_selection():
+    # The Darwinian loop closed physically: the ONLY source of variation is
+    # thermal replication error (no informational mutation model), yet selection
+    # still adapts the population.
+    import random
+
+    from nucleic import replicate_sequence
+
+    rng = random.Random(2026)
+    template = "ATATATGCATATATAT"
+    members = [
+        DNASequence(replicate_sequence(template, temperature=12.0, rng=rng))
+        for _ in range(150)
+    ]
+    pop = Population(
+        members=members,
+        model=MutationModel(0.0, 0.0, 0.0),  # zero informational mutation
+        fitness_fn=gc_target_fitness(0.9),
+        rng=rng,
+    )
+    history = pop.run(12)
+    assert history[-1].mean_fitness > history[0].mean_fitness
+
+
 def test_informational_layer_evolves_on_top():
     # Layer 4: the informational layer (populations under selection) runs on the
     # same DNA the physical layer manipulates — the stack is coherent top to

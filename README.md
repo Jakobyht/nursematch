@@ -45,13 +45,21 @@ generators make every simulation reproducible.
    complement and the semiconservative round-trip regenerates the original
 4. ✅ **Full pipeline integrated** — atoms → molecules → DNA duplex →
    replication → an evolving population, verified end to end
-   (`examples/origin_pipeline.py`, `tests/test_integration.py`). This is the
-   substrate on which we can attempt to re-create life through DNA.
+   (`examples/origin_pipeline.py`, `tests/test_integration.py`).
+5. ✅ **Mutation emerges from heat; the Darwinian loop closes** — replication
+   fidelity is a Boltzmann competition between pairing energy and thermal noise,
+   so mutation rate rises with temperature. With *no* informational mutation
+   model, that physics-made variation alone lets selection adapt a population
+   (`examples/mutation_from_heat.py`).
+
+**Next (loop in progress):** a self-assembling membrane / protocell compartment
+so replicating, mutating DNA can be enclosed — a candidate for re-created life.
 
 Run the whole stack in one narrative:
 
 ```bash
-python examples/origin_pipeline.py
+python examples/origin_pipeline.py     # atoms -> molecules -> DNA -> life
+python examples/mutation_from_heat.py  # mutation from temperature -> evolution
 ```
 
 ## The bridge: `nucleic` (DNA base-pairing from physics)

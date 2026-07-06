@@ -18,7 +18,10 @@ from .pairing import (
 )
 from .replication import (
     ReplicationResult,
+    replicate_sequence,
     replicate_template,
+    replication_error_rate,
+    select_base_thermal,
     select_complement,
 )
 from .strand import BASE_BEAD, Duplex, build_duplex
@@ -36,5 +39,8 @@ __all__ = [
     "build_duplex",
     "ReplicationResult",
     "replicate_template",
+    "replicate_sequence",
+    "replication_error_rate",
     "select_complement",
+    "select_base_thermal",
 ]

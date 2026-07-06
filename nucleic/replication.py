@@ -21,6 +21,8 @@ matter and information.
 
 from __future__ import annotations
 
+import math
+import random
 from dataclasses import dataclass
 
 from atomsim.atom import Atom
@@ -43,6 +45,70 @@ def select_complement(template_base: str) -> str:
     rather than a hand-written lookup.
     """
     return max(BASES, key=lambda b: pair_strength(template_base, b))
+
+
+def select_base_thermal(
+    template_base: str, temperature: float, rng: random.Random
+) -> str:
+    """Choose the incoming base by a thermodynamic competition at the active site.
+
+    Each candidate base is weighted by a Boltzmann factor in its pairing energy,
+    ``exp(pair_strength / temperature)``, so the well-matched (complementary)
+    base is favoured but thermal energy can drive a mismatch. ``temperature`` is
+    the thermal energy scale (kJ/mol), comparable to the pairing strengths
+    (~16–24): near zero it is deterministic and perfect; as it approaches and
+    exceeds the pairing strengths, misincorporation — i.e. mutation — emerges.
+
+    This is the physical origin of replication error: fidelity is not perfect,
+    it is a temperature-dependent balance between pairing energy and thermal
+    noise.
+    """
+    if temperature <= 0.0:
+        return select_complement(template_base)
+    strengths = [pair_strength(template_base, b) for b in BASES]
+    top = max(strengths)  # subtract the max for numerical stability
+    weights = [math.exp((s - top) / temperature) for s in strengths]
+    return rng.choices(BASES, weights=weights, k=1)[0]
+
+
+def replicate_sequence(
+    template: str | DNASequence,
+    temperature: float = 0.0,
+    rng: random.Random | None = None,
+) -> str:
+    """Replicate a template at the sequence level with thermal fidelity.
+
+    A fast path that runs the same base-selection physics as
+    :func:`replicate_template` without the molecular-dynamics docking, for when
+    only the (possibly mutated) daughter sequence is needed — e.g. measuring how
+    mutation rate depends on temperature, or feeding physical replication errors
+    into the evolution layer. Returns the daughter in template-aligned
+    (complement) order.
+    """
+    tseq = DNASequence(str(template))
+    r = rng if rng is not None else random.Random()
+    return "".join(select_base_thermal(b, temperature, r) for b in tseq.bases)
+
+
+def replication_error_rate(
+    template: str | DNASequence,
+    temperature: float,
+    trials: int,
+    rng: random.Random,
+) -> float:
+    """Empirical per-base misincorporation rate at a given temperature.
+
+    Replicates ``template`` ``trials`` times and reports the fraction of
+    positions that differ from the perfect Watson-Crick complement.
+    """
+    tseq = DNASequence(str(template))
+    perfect = str(tseq.complement())
+    n = len(perfect)
+    errors = 0
+    for _ in range(trials):
+        daughter = replicate_sequence(tseq, temperature, rng)
+        errors += sum(1 for a, b in zip(daughter, perfect) if a != b)
+    return errors / (trials * n)
 
 
 @dataclass
@@ -84,6 +150,8 @@ def replicate_template(
     steps_per_base: int = 1500,
     final_relax_steps: int | None = None,
     dt: float = 0.01,
+    temperature: float = 0.0,
+    rng: random.Random | None = None,
 ) -> ReplicationResult:
     """Physically replicate a template strand, one nucleotide at a time.
 
@@ -127,10 +195,13 @@ def replicate_template(
         damping=damping,
     )
 
+    r = rng if rng is not None else random.Random()
     daughter_idx: list[int] = []
     daughter_chars: list[str] = []
     for k in range(n):
-        base = select_complement(tbases[k])  # fidelity from pairing affinity
+        # Fidelity from physics: pairing affinity vs thermal noise. At
+        # temperature 0 this is the deterministic Watson-Crick complement.
+        base = select_base_thermal(tbases[k], temperature, r)
         daughter_chars.append(base)
         new_index = len(atoms)
         # Deliver the monomer near its template site (as a polymerase would

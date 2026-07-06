@@ -70,3 +70,63 @@ def test_fidelity_selected_base_binds_alternatives_do_not():
 def test_empty_template_rejected():
     with pytest.raises(ValueError):
         replicate_template("")
+
+
+# --- Thermal fidelity: mutations emerging from temperature ---
+
+import random
+
+from nucleic import (
+    replicate_sequence,
+    replication_error_rate,
+    select_base_thermal,
+)
+
+
+def test_zero_temperature_replication_is_perfect():
+    template = "GCGATTACGC"
+    assert replicate_sequence(template, temperature=0.0) == str(
+        DNASequence(template).complement()
+    )
+
+
+def test_high_temperature_introduces_mutations():
+    rate = replication_error_rate(
+        "GCGATTACGCTAGCTA", temperature=15.0, trials=100, rng=random.Random(1)
+    )
+    assert rate > 0.0
+
+
+def test_mutation_rate_increases_with_temperature():
+    template = "GCGATTACGCTAGCTA"
+    cold = replication_error_rate(template, 2.0, 200, random.Random(7))
+    warm = replication_error_rate(template, 8.0, 200, random.Random(7))
+    hot = replication_error_rate(template, 20.0, 200, random.Random(7))
+    assert cold < warm < hot
+
+
+def test_thermal_selection_low_temperature_prefers_complement():
+    # At low temperature the complement is chosen overwhelmingly.
+    rng = random.Random(0)
+    picks = [select_base_thermal("A", temperature=1.0, rng=rng) for _ in range(200)]
+    assert picks.count("T") > 190  # ~always the complement
+
+
+def test_thermal_errors_are_point_substitutions_of_the_complement():
+    # A thermally-mutated daughter has the same length as the perfect
+    # complement and differs only by substitutions — i.e. point mutations.
+    template = "GCGATTACGC"
+    perfect = str(DNASequence(template).complement())
+    daughter = replicate_sequence(template, temperature=25.0, rng=random.Random(3))
+    assert len(daughter) == len(perfect)
+    assert daughter != perfect  # at high T, some positions mutated
+
+
+def test_physical_replication_accepts_temperature():
+    # The full molecular-dynamics replication path also takes a temperature and
+    # rng and still returns a same-length daughter.
+    result = replicate_template(
+        "ATGC", temperature=10.0, rng=random.Random(5), final_relax_steps=0,
+        steps_per_base=80,
+    )
+    assert len(result.daughter) == 4
