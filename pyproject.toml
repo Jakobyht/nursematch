@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "dna-sim"
 version = "0.1.0"
-description = "A small, dependency-free toolkit for simulating DNA sequences and their evolution."
+description = "Simulate matter from the atom up (molecular dynamics) and re-create life through DNA on top of it."
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
@@ -19,7 +19,7 @@ dna-sim = "dna_sim.cli:main"
 dev = ["pytest>=7.0"]
 
 [tool.setuptools.packages.find]
-include = ["dna_sim*"]
+include = ["dna_sim*", "atomsim*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

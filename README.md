@@ -1,12 +1,53 @@
-# dna-sim
+# life-from-atoms
 
-A small, dependency-free Python toolkit for **simulating DNA** — its sequences
-and the core molecular processes that act on them: complementation,
-transcription, translation, mutation, replication, and population-level
-evolution under selection.
+A dependency-free Python project working toward one goal: **simulate matter
+from the atom up, and re-create life through DNA on top of it.**
+
+The philosophy borrows from how physics-based *digital twins* (e.g. the
+simulation pipelines behind self-driving programs like Tesla's) are built —
+model the real substrate accurately, calibrate against known physical
+constants, and let complex behaviour *emerge* from validated low-level physics
+rather than being scripted. Here the substrate is the atom.
+
+Two layers, built to meet in the middle:
+
+- **`atomsim`** — the *physical* layer. Classical molecular dynamics: atoms as
+  point masses interacting through a real force field (Lennard-Jones van der
+  Waals, Coulomb electrostatics, harmonic covalent bonds), integrated with the
+  symplectic velocity-Verlet algorithm. This is how you "program atoms."
+- **`dna_sim`** — the *informational* layer. DNA sequences and the processes
+  acting on them: complementation, transcription, translation, mutation,
+  replication, and population-level evolution under selection.
+
+The mission is to grow `atomsim` upward (atoms → molecules → macromolecules →
+DNA) until DNA base-pairing and replication *emerge from the physics*, meeting
+`dna_sim` from below — the point at which we can attempt to re-create life.
 
 Everything runs on the Python standard library. Seeded random number
 generators make every simulation reproducible.
+
+## The physical layer: `atomsim`
+
+```python
+from atomsim import Atom, MolecularSystem, Bond, water
+
+# Build a water molecule and let it settle under the force field.
+system = water()
+samples = system.run(steps=2000, dt=0.0005, sample_every=500)
+print(samples[-1]["total"], samples[-1]["temperature"])  # energy is conserved
+
+# Or assemble atoms by hand:
+atoms = [Atom.of("C", (0, 0, 0)), Atom.of("C", (1.6, 0, 0))]
+bonds = [Bond(0, 1, length=1.3, stiffness=1000.0)]
+dimer = MolecularSystem(atoms=atoms, bonds=bonds)
+dimer.step(dt=0.0005)          # one velocity-Verlet step
+dimer.total_energy()           # kinetic + potential
+```
+
+Run `python examples/atomsim_demo.py` to see the Lennard-Jones curve, a water
+molecule conserving energy to ~0.02% drift, and a bond vibrating.
+
+## The informational layer: `dna_sim`
 
 ## Install
 
