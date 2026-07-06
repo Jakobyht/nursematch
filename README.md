@@ -38,9 +38,13 @@ generators make every simulation reproducible.
 2. ✅ **Base-pairing emerges from physics** (`nucleic`) — complementary strands
    zip together; specificity (A–T vs G–C, matched vs mismatched) falls out of
    the interaction, not hand-coded rules
-3. ⏳ Double-strand geometry and physically-driven replication
-4. ⏳ Replication as a physical process, connected to `dna_sim` — the point at
-   which we attempt to re-create life
+3. ✅ **Template-directed replication emerges from physics**
+   (`nucleic.replication`) — a template is copied one nucleotide at a time,
+   base selection driven by pairing affinity (Watson-Crick fidelity), monomers
+   docking under the force field; the physical daughter reproduces `dna_sim`'s
+   complement and the semiconservative round-trip regenerates the original
+4. ⏳ Self-replicating assemblies and error/mutation under the physical model —
+   the point at which we attempt to re-create life
 
 ## The bridge: `nucleic` (DNA base-pairing from physics)
 
@@ -61,6 +65,25 @@ mismatch.paired_fraction()                    # -> 0.0
 
 Run `python examples/pairing_demo.py` to watch strands zip (and a mismatch stay
 open).
+
+### Replication from physics
+
+```python
+from nucleic import replicate_template
+from dna_sim import DNASequence
+
+result = replicate_template("GCGATTACGC")   # copied nucleotide by nucleotide
+result.daughter                              # -> "CGCTAATGCG"
+str(DNASequence("GCGATTACGC").complement())  # -> "CGCTAATGCG"  (matches!)
+result.paired_fraction()                     # -> 1.0  (daughter paired to template)
+
+# Semiconservative: replicating the daughter regenerates the original.
+daughter = result.as_daughter_strand()
+str(replicate_template(daughter).as_daughter_strand())   # -> "GCGATTACGC"
+```
+
+Run `python examples/replication_demo.py` to watch a strand template its own
+complement, base by base, with fidelity emerging from pairing affinity.
 
 ## The physical layer: `atomsim`
 

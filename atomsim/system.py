@@ -38,6 +38,7 @@ class MolecularSystem:
     nonbonded_cutoff: float | None = None
     extra_forces: ExtraForces | None = None
     exclusions: set[frozenset[int]] | None = None
+    fixed: set[int] = field(default_factory=set)  # atom indices held in place
     damping: float = 0.0  # viscous drag coefficient (1/time); 0 = conservative
     time: float = 0.0
 
@@ -106,10 +107,14 @@ class MolecularSystem:
         """
         forces, _ = self._compute()
         half_dt = 0.5 * dt
+        fixed = self.fixed
 
-        # First half-kick + drift.
+        # First half-kick + drift. Fixed atoms stay put (velocity pinned to 0).
         half_velocities: list[Vec3] = []
-        for atom, force in zip(self.atoms, forces):
+        for i, (atom, force) in enumerate(zip(self.atoms, forces)):
+            if i in fixed:
+                half_velocities.append(Vec3())
+                continue
             accel = force / atom.mass
             v_half = atom.velocity + accel * half_dt
             half_velocities.append(v_half)
@@ -120,7 +125,11 @@ class MolecularSystem:
         drag = 1.0 - self.damping * dt if self.damping else 1.0
         if drag < 0.0:
             drag = 0.0
-        for atom, force, v_half in zip(self.atoms, new_forces, half_velocities):
+        for i, (atom, force, v_half) in enumerate(
+            zip(self.atoms, new_forces, half_velocities)
+        ):
+            if i in fixed:
+                continue
             accel = force / atom.mass
             atom.velocity = (v_half + accel * half_dt) * drag
 

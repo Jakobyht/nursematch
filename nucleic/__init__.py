@@ -16,6 +16,11 @@ from .pairing import (
     pairing_forces_factory,
     pairing_pair,
 )
+from .replication import (
+    ReplicationResult,
+    replicate_template,
+    select_complement,
+)
 from .strand import BASE_BEAD, Duplex, build_duplex
 
 __all__ = [
@@ -29,4 +34,7 @@ __all__ = [
     "BASE_BEAD",
     "Duplex",
     "build_duplex",
+    "ReplicationResult",
+    "replicate_template",
+    "select_complement",
 ]
