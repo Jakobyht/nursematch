@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dna-sim"
+version = "0.1.0"
+description = "A small, dependency-free toolkit for simulating DNA sequences and their evolution."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "nursematch contributors" }]
+keywords = ["dna", "bioinformatics", "simulation", "evolution", "genetics"]
+
+[project.scripts]
+dna-sim = "dna_sim.cli:main"
+
+[project.optional-dependencies]
+dev = ["pytest>=7.0"]
+
+[tool.setuptools.packages.find]
+include = ["dna_sim*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
