@@ -3,10 +3,18 @@
 This is the heart of the physical simulation: given atoms, bonds, and a force
 field, it steps Newton's equations forward in time. Everything above (DNA,
 life) is meant to eventually rest on this substrate.
+
+The system supports two extensions used by higher layers:
+
+* ``extra_forces`` — a pluggable interaction (e.g. DNA base-pairing) layered on
+  top of the built-in force field without duplicating the integrator.
+* ``damping``      — a simple viscous drag that removes kinetic energy, letting
+  structures relax into minima the way biomolecules settle in a solvent.
 """
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 
 from .atom import Atom
@@ -16,6 +24,10 @@ from .vector import Vec3
 # Boltzmann constant in the MD unit system: kJ/(mol·K).
 BOLTZMANN = 0.0083144621
 
+# An extra interaction: given the atoms, return per-atom forces and an energy
+# dict whose keys are merged into the system's energy breakdown.
+ExtraForces = Callable[[list[Atom]], tuple[list[Vec3], dict[str, float]]]
+
 
 @dataclass
 class MolecularSystem:
@@ -24,11 +36,26 @@ class MolecularSystem:
     atoms: list[Atom]
     bonds: list[Bond] = field(default_factory=list)
     nonbonded_cutoff: float | None = None
+    extra_forces: ExtraForces | None = None
+    exclusions: set[frozenset[int]] | None = None
+    damping: float = 0.0  # viscous drag coefficient (1/time); 0 = conservative
     time: float = 0.0
 
+    def _compute(self) -> tuple[list[Vec3], dict[str, float]]:
+        """Total per-atom force and energy breakdown, including extras."""
+        forces, energy = compute_forces(
+            self.atoms, self.bonds, self.nonbonded_cutoff, self.exclusions
+        )
+        if self.extra_forces is not None:
+            extra_f, extra_e = self.extra_forces(self.atoms)
+            forces = [f + ef for f, ef in zip(forces, extra_f)]
+            for key, value in extra_e.items():
+                energy[key] = energy.get(key, 0.0) + value
+                energy["potential"] += value
+        return forces, energy
+
     def potential_energy(self) -> float:
-        _, energy = compute_forces(self.atoms, self.bonds, self.nonbonded_cutoff)
-        return energy["potential"]
+        return self._compute()[1]["potential"]
 
     def kinetic_energy(self) -> float:
         return sum(a.kinetic_energy() for a in self.atoms)
@@ -38,7 +65,7 @@ class MolecularSystem:
 
     def energy_breakdown(self) -> dict[str, float]:
         """Full energy report including kinetic and total."""
-        _, energy = compute_forces(self.atoms, self.bonds, self.nonbonded_cutoff)
+        energy = self._compute()[1]
         ke = self.kinetic_energy()
         energy["kinetic"] = ke
         energy["total"] = energy["potential"] + ke
@@ -73,9 +100,11 @@ class MolecularSystem:
             x(t+dt)  = x(t) + v(t+½dt)·dt
             recompute a(t+dt)
             v(t+dt)  = v(t+½dt) + ½·a(t+dt)·dt
-        This is symplectic, so total energy stays bounded over long runs.
+        This is symplectic, so total energy stays bounded over long runs. When
+        ``damping`` > 0 a viscous drag is applied, deliberately draining energy
+        so the system relaxes (no longer energy-conserving).
         """
-        forces, _ = compute_forces(self.atoms, self.bonds, self.nonbonded_cutoff)
+        forces, _ = self._compute()
         half_dt = 0.5 * dt
 
         # First half-kick + drift.
@@ -87,12 +116,13 @@ class MolecularSystem:
             atom.position = atom.position + v_half * dt
 
         # Recompute forces at the new positions and do the second half-kick.
-        new_forces, _ = compute_forces(
-            self.atoms, self.bonds, self.nonbonded_cutoff
-        )
+        new_forces, _ = self._compute()
+        drag = 1.0 - self.damping * dt if self.damping else 1.0
+        if drag < 0.0:
+            drag = 0.0
         for atom, force, v_half in zip(self.atoms, new_forces, half_velocities):
             accel = force / atom.mass
-            atom.velocity = v_half + accel * half_dt
+            atom.velocity = (v_half + accel * half_dt) * drag
 
         self.time += dt
 

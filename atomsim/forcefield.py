@@ -89,12 +89,16 @@ def compute_forces(
     atoms: list[Atom],
     bonds: list[Bond],
     nonbonded_cutoff: float | None = None,
+    exclusions: set[frozenset[int]] | None = None,
 ) -> tuple[list[Vec3], dict[str, float]]:
     """Compute the total force on every atom and a breakdown of the energy.
 
     Non-bonded (LJ + Coulomb) interactions are summed over every unique pair;
     a distance cutoff can skip far-apart pairs. Bonded pairs are excluded from
     the non-bonded sum so the spring is not fighting van der Waals repulsion.
+    Additional ``exclusions`` (as ``frozenset({i, j})`` index pairs) are also
+    skipped — used when a specialised interaction, such as DNA base-pairing,
+    governs a pair's short-range behaviour instead of Lennard-Jones.
 
     Returns ``(forces, energy)`` where ``energy`` has keys ``lennard_jones``,
     ``coulomb``, ``bond`` and ``potential`` (their sum).
@@ -103,6 +107,8 @@ def compute_forces(
     forces = [ZERO for _ in range(n)]
     energy = {"lennard_jones": 0.0, "coulomb": 0.0, "bond": 0.0}
     bonded_pairs = {frozenset((b.i, b.j)) for b in bonds}
+    if exclusions:
+        bonded_pairs |= exclusions
     cutoff_sq = None if nonbonded_cutoff is None else nonbonded_cutoff ** 2
 
     for i in range(n):

@@ -19,12 +19,48 @@ Two layers, built to meet in the middle:
   acting on them: complementation, transcription, translation, mutation,
   replication, and population-level evolution under selection.
 
-The mission is to grow `atomsim` upward (atoms → molecules → macromolecules →
-DNA) until DNA base-pairing and replication *emerge from the physics*, meeting
+- **`nucleic`** — the *bridge*. Turns a `dna_sim` sequence into a physical
+  strand of coarse-grained base beads, where Watson-Crick base pairing (A–T,
+  G–C) *emerges* from a specific hydrogen-bond-like interaction between
+  complementary bases. Two complementary strands, started apart, physically zip
+  together; mismatched strands do not.
+
+The mission is to grow this upward (atoms → molecules → macromolecules → DNA)
+until DNA base-pairing and replication *emerge from the physics*, meeting
 `dna_sim` from below — the point at which we can attempt to re-create life.
 
 Everything runs on the Python standard library. Seeded random number
 generators make every simulation reproducible.
+
+### Progress toward life-from-atoms
+
+1. ✅ **Atoms + force field + integrator** (`atomsim`) — energy-conserving MD
+2. ✅ **Base-pairing emerges from physics** (`nucleic`) — complementary strands
+   zip together; specificity (A–T vs G–C, matched vs mismatched) falls out of
+   the interaction, not hand-coded rules
+3. ⏳ Double-strand geometry and physically-driven replication
+4. ⏳ Replication as a physical process, connected to `dna_sim` — the point at
+   which we attempt to re-create life
+
+## The bridge: `nucleic` (DNA base-pairing from physics)
+
+```python
+from nucleic import build_duplex
+
+# Two complementary strands, started 6 Å apart, zip shut under the pairing force.
+duplex = build_duplex("GCGATTACGC")          # partner defaults to reverse complement
+duplex.system.run(steps=6000, dt=0.01)
+duplex.paired_fraction()                      # -> 1.0 (fully paired)
+duplex.mean_pair_distance()                   # -> ~3.0 Å
+
+# Specificity is emergent: a non-complementary partner refuses to pair.
+mismatch = build_duplex("AAAA", partner="AAAA")
+mismatch.system.run(steps=6000, dt=0.01)
+mismatch.paired_fraction()                    # -> 0.0
+```
+
+Run `python examples/pairing_demo.py` to watch strands zip (and a mismatch stay
+open).
 
 ## The physical layer: `atomsim`
 
