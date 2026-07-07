@@ -1,0 +1,157 @@
+"""A molecular system and its time evolution via velocity Verlet.
+
+This is the heart of the physical simulation: given atoms, bonds, and a force
+field, it steps Newton's equations forward in time. Everything above (DNA,
+life) is meant to eventually rest on this substrate.
+
+The system supports two extensions used by higher layers:
+
+* ``extra_forces`` — a pluggable interaction (e.g. DNA base-pairing) layered on
+  top of the built-in force field without duplicating the integrator.
+* ``damping``      — a simple viscous drag that removes kinetic energy, letting
+  structures relax into minima the way biomolecules settle in a solvent.
+"""
+
+from __future__ import annotations
+
+from collections.abc import Callable
+from dataclasses import dataclass, field
+
+from .atom import Atom
+from .forcefield import Bond, compute_forces
+from .vector import Vec3
+
+# Boltzmann constant in the MD unit system: kJ/(mol·K).
+BOLTZMANN = 0.0083144621
+
+# An extra interaction: given the atoms, return per-atom forces and an energy
+# dict whose keys are merged into the system's energy breakdown.
+ExtraForces = Callable[[list[Atom]], tuple[list[Vec3], dict[str, float]]]
+
+
+@dataclass
+class MolecularSystem:
+    """A collection of atoms and bonds evolving under a force field."""
+
+    atoms: list[Atom]
+    bonds: list[Bond] = field(default_factory=list)
+    nonbonded_cutoff: float | None = None
+    extra_forces: ExtraForces | None = None
+    exclusions: set[frozenset[int]] | None = None
+    fixed: set[int] = field(default_factory=set)  # atom indices held in place
+    damping: float = 0.0  # viscous drag coefficient (1/time); 0 = conservative
+    time: float = 0.0
+
+    def _compute(self) -> tuple[list[Vec3], dict[str, float]]:
+        """Total per-atom force and energy breakdown, including extras."""
+        forces, energy = compute_forces(
+            self.atoms, self.bonds, self.nonbonded_cutoff, self.exclusions
+        )
+        if self.extra_forces is not None:
+            extra_f, extra_e = self.extra_forces(self.atoms)
+            forces = [f + ef for f, ef in zip(forces, extra_f)]
+            for key, value in extra_e.items():
+                energy[key] = energy.get(key, 0.0) + value
+                energy["potential"] += value
+        return forces, energy
+
+    def potential_energy(self) -> float:
+        return self._compute()[1]["potential"]
+
+    def kinetic_energy(self) -> float:
+        return sum(a.kinetic_energy() for a in self.atoms)
+
+    def total_energy(self) -> float:
+        return self.potential_energy() + self.kinetic_energy()
+
+    def energy_breakdown(self) -> dict[str, float]:
+        """Full energy report including kinetic and total."""
+        energy = self._compute()[1]
+        ke = self.kinetic_energy()
+        energy["kinetic"] = ke
+        energy["total"] = energy["potential"] + ke
+        return energy
+
+    def temperature(self) -> float:
+        """Instantaneous temperature from the equipartition theorem.
+
+        T = 2·KE / (dof · k_B), with dof = 3N (translational only; this simple
+        model does not remove centre-of-mass motion).
+        """
+        n = len(self.atoms)
+        if n == 0:
+            return 0.0
+        dof = 3 * n
+        return 2.0 * self.kinetic_energy() / (dof * BOLTZMANN)
+
+    def center_of_mass(self) -> Vec3:
+        total_mass = sum(a.mass for a in self.atoms)
+        if total_mass == 0.0:
+            raise ValueError("system has zero total mass")
+        weighted = Vec3()
+        for a in self.atoms:
+            weighted = weighted + a.position * a.mass
+        return weighted / total_mass
+
+    def step(self, dt: float) -> None:
+        """Advance the system by one velocity-Verlet step of size ``dt``.
+
+        Velocity Verlet:
+            v(t+½dt) = v(t) + ½·a(t)·dt
+            x(t+dt)  = x(t) + v(t+½dt)·dt
+            recompute a(t+dt)
+            v(t+dt)  = v(t+½dt) + ½·a(t+dt)·dt
+        This is symplectic, so total energy stays bounded over long runs. When
+        ``damping`` > 0 a viscous drag is applied, deliberately draining energy
+        so the system relaxes (no longer energy-conserving).
+        """
+        forces, _ = self._compute()
+        half_dt = 0.5 * dt
+        fixed = self.fixed
+
+        # First half-kick + drift. Fixed atoms stay put (velocity pinned to 0).
+        half_velocities: list[Vec3] = []
+        for i, (atom, force) in enumerate(zip(self.atoms, forces)):
+            if i in fixed:
+                half_velocities.append(Vec3())
+                continue
+            accel = force / atom.mass
+            v_half = atom.velocity + accel * half_dt
+            half_velocities.append(v_half)
+            atom.position = atom.position + v_half * dt
+
+        # Recompute forces at the new positions and do the second half-kick.
+        new_forces, _ = self._compute()
+        drag = 1.0 - self.damping * dt if self.damping else 1.0
+        if drag < 0.0:
+            drag = 0.0
+        for i, (atom, force, v_half) in enumerate(
+            zip(self.atoms, new_forces, half_velocities)
+        ):
+            if i in fixed:
+                continue
+            accel = force / atom.mass
+            atom.velocity = (v_half + accel * half_dt) * drag
+
+        self.time += dt
+
+    def run(self, steps: int, dt: float, sample_every: int = 0) -> list[dict]:
+        """Integrate for ``steps`` steps, optionally sampling energies.
+
+        When ``sample_every`` > 0, an energy breakdown (with ``time``) is
+        recorded every ``sample_every`` steps, plus one at the start.
+        """
+        samples: list[dict] = []
+        if sample_every > 0:
+            samples.append(self._sample())
+        for k in range(1, steps + 1):
+            self.step(dt)
+            if sample_every > 0 and k % sample_every == 0:
+                samples.append(self._sample())
+        return samples
+
+    def _sample(self) -> dict:
+        report = self.energy_breakdown()
+        report["time"] = self.time
+        report["temperature"] = self.temperature()
+        return report
